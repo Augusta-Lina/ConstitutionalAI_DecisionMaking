@@ -15,7 +15,7 @@ cai-replication/
 │   ├── download_model.py     ← download Mistral-7B-Instruct-v0.1 to /workspace/models
 │   ├── setup_pod.sh          ← pod setup: uv, caches, uv sync, vLLM
 │   ├── serve_model.sh        ← start the vLLM server on port 8000
-│   └── run_pipeline.sh       ← run everything for one constitution (see section 6)
+│   └── run_pipeline.sh       ← run everything for one constitution (see section 0)
 ├── data-generation/          ← Stages 1–2
 │   ├── constitution_anthropic.json ← the original constitution, unchanged
 │   ├── generate_dataset.py   ← critique–revision generation + dataset construction
