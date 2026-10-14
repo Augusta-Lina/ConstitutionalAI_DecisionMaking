@@ -122,15 +122,3 @@ uv run evaluation/generate.py --output data/eval-report.md        # base vs SFT 
 ```
 
 Both trainers evaluate the untrained model first (`eval_baseline`), then after every epoch, and keep the best epoch. Read the eval report before trusting the metrics: at 128 rows the DPO metrics improved while its answers collapsed into boilerplate.
-
-## 6. Run everything: scripts/run_pipeline.sh
-
-One command runs generation → SFT → DPO → evaluation for one constitution. Everything goes to `/workspace/runs/<run name>/` on the volume: the dataset with Markdown reports, both adapters with logs and per-run config copies, the eval report, `pipeline.log`, and a one-page `run.md` summary. An existing run name is refused, so nothing is overwritten.
-
-```bash
-# on the pod, after scripts/setup_pod.sh and a .env containing HF_TOKEN; inside tmux so it survives disconnects
-tmux new -s pipeline
-bash scripts/run_pipeline.sh 2026-10-15_anthropic data-generation/constitution_anthropic.json 128
-```
-
-About 45 minutes at 128 samples. Sections 3 and 5 describe what the script runs, stage by stage.
