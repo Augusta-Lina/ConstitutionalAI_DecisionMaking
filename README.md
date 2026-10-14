@@ -14,12 +14,33 @@ cai-replication/
 ├── scripts/                  ← setup and one-off tasks
 │   ├── download_model.py     ← download Mistral-7B-Instruct-v0.1 to /workspace/models
 │   ├── setup_pod.sh          ← pod setup: uv, caches, uv sync, vLLM
-│   └── serve_model.sh        ← start the vLLM server on port 8000
-└── data-generation/          ← Stages 1–2
-    ├── constitution_anthropic.json ← the original constitution, unchanged
-    ├── generate_dataset.py   ← critique–revision generation + dataset construction
-    └── render_outputs.py     ← JSONL - readable Markdown report
+│   ├── serve_model.sh        ← start the vLLM server on port 8000
+│   └── run_pipeline.sh       ← run everything for one constitution (see section 6)
+├── data-generation/          ← Stages 1–2
+│   ├── constitution_anthropic.json ← the original constitution, unchanged
+│   ├── generate_dataset.py   ← critique–revision generation + dataset construction
+│   └── render_outputs.py     ← JSONL → readable Markdown report
+├── training/
+│   ├── sft/                  ← Stage 3: config.yaml, chat_template.jinja, sft.py
+│   └── dpo/                  ← Stage 4: config.yaml, dpo.py
+└── evaluation/
+    └── generate.py           ← base vs SFT vs DPO answers on test_sft prompts → Markdown
+
 ```
+
+## 0. Run everything: scripts/run_pipeline.sh
+
+One command runs generation → SFT → DPO → evaluation for one constitution. Everything goes to `/workspace/runs/<run name>/` on the volume: the dataset with Markdown reports, both adapters with logs and per-run config copies, the eval report, `pipeline.log`, and a one-page `run.md` summary. An existing run name is refused, so nothing is overwritten.
+
+```bash
+# on the pod, after scripts/setup_pod.sh and a .env containing HF_TOKEN; inside tmux so it survives disconnects
+tmux new -s pipeline
+bash scripts/run_pipeline.sh 2026-10-15_anthropic data-generation/constitution_anthropic.json 128
+```
+
+About 45 minutes at 128 samples. Sections 3 and 5 describe what the script runs, stage by stage.
+
+The script runs the following processes:
 
 ## 1. Setup
 
@@ -89,3 +110,27 @@ uv run data-generation/render_outputs.py --input <file> --rows 0 3 7 --max_chars
 First toy run (2026-10-06): 128 prompts per split, 768 model calls, under 3 minutes on one GPU with 16 concurrent requests. Dataset: https://huggingface.co/datasets/AugustaLina/cai-conversation-dev1791308628
 
 See `SPEC.md` for every difference from the original scripts.
+
+## 5. Training and evaluation (Stages 3–4)
+
+LoRA on one GPU instead of HF's full fine-tune on 8×H100. Each stage is a YAML config plus a script. From the repo folder on the pod:
+
+```bash
+uv run training/sft/sft.py --config training/sft/config.yaml      # Stage 3, ~10 min for Mistral-7B
+uv run training/dpo/dpo.py --config training/dpo/config.yaml      # Stage 4, ~13 min; starts from the SFT adapter
+uv run evaluation/generate.py --output data/eval-report.md        # base vs SFT vs DPO on 10 test_sft prompts
+```
+
+Both trainers evaluate the untrained model first (`eval_baseline`), then after every epoch, and keep the best epoch. Read the eval report before trusting the metrics: at 128 rows the DPO metrics improved while its answers collapsed into boilerplate.
+
+## 6. Run everything: scripts/run_pipeline.sh
+
+One command runs generation → SFT → DPO → evaluation for one constitution. Everything goes to `/workspace/runs/<run name>/` on the volume: the dataset with Markdown reports, both adapters with logs and per-run config copies, the eval report, `pipeline.log`, and a one-page `run.md` summary. An existing run name is refused, so nothing is overwritten.
+
+```bash
+# on the pod, after scripts/setup_pod.sh and a .env containing HF_TOKEN; inside tmux so it survives disconnects
+tmux new -s pipeline
+bash scripts/run_pipeline.sh 2026-10-15_anthropic data-generation/constitution_anthropic.json 128
+```
+
+About 45 minutes at 128 samples. Sections 3 and 5 describe what the script runs, stage by stage.
