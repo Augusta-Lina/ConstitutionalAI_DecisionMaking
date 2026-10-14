@@ -88,6 +88,7 @@ import json, sys
 run_dir, run_name, dataset_id, constitution = sys.argv[1:5]
 sft = json.load(open(f"{run_dir}/sft/all_results.json"))
 dpo = json.load(open(f"{run_dir}/dpo/all_results.json"))
+sft_base = json.load(open(f"{run_dir}/sft/eval_baseline_results.json"))
 pct = lambda x: f"{100 * x:.0f}%"
 lines = [
     f"# Run {run_name}", "",
@@ -95,7 +96,7 @@ lines = [
     f"- Dataset: `{dataset_id}` (rows + Markdown reports in `dataset/`)",
     f"- Reports: `dataset/*/train.md`, `dataset/*/test.md`, `eval/eval-report.md`", "",
     "## SFT (held-out rows)", "", "| | Eval loss | Token accuracy |", "|---|---|---|",
-    f"| Before training | {sft['eval_baseline_loss']:.3f} | {pct(sft['eval_mean_token_accuracy'])} |"
+    f"| Before training | {sft['eval_baseline_loss']:.3f} | {pct(sft_base['eval_mean_token_accuracy'])} |"
     if 'eval_baseline_loss' in sft else "| Before training | n/a | n/a |",
     f"| Final | {sft['eval_loss']:.3f} | {pct(sft['eval_mean_token_accuracy'])} |",
     f"| Train loss / time | {sft['train_loss']:.3f} | {sft['train_runtime'] / 60:.1f} min |", "",
