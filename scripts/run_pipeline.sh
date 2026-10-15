@@ -2,7 +2,7 @@
 # Run the whole pipeline for one constitution: generation -> SFT -> DPO -> evaluation.
 # Every output goes to /workspace/runs/<run name>/ (persistent volume), nothing is overwritten.
 # Usage, from the repo root on the pod, inside tmux so it survives disconnects:
-#   bash scripts/run_pipeline.sh <run name> <constitution file> [max_samples]
+#   bash scripts/run_pipeline.sh <run name> <constitution file> [max_samples] [prompt source]
 #   e.g. bash scripts/run_pipeline.sh 2026-10-15_anthropic data-generation/constitution_anthropic.json 128
 
 # Block 1: settings
@@ -12,6 +12,8 @@ set -euo pipefail
 RUN_NAME="${1:?usage: run_pipeline.sh <run name> <constitution file> [max_samples]}"
 CONSTITUTION="${2:?usage: run_pipeline.sh <run name> <constitution file> [max_samples]}"
 MAX_SAMPLES="${3:-128}"
+PROMPT_SOURCE="${4:-hh-rlhf}"                  # "hh-rlhf", or a folder of unpacked TWA posts, e.g. /workspace/datasets/TWA
+PRIVATE=$([ "${PROMPT_SOURCE}" = "hh-rlhf" ] && echo false || echo true)
 MAX_WORKERS=16
 HF_USER="AugustaLina"
 
@@ -45,6 +47,7 @@ log "vLLM ready"
 uv run data-generation/generate_dataset.py \
   --constitution_path "${CONSTITUTION}" --max_samples "${MAX_SAMPLES}" --max_workers "${MAX_WORKERS}" \
   --output_dir "${RUN_DIR}/dataset" --repo_id "${DATASET_NAME}" --timestamp false --push_to_hub true \
+  --prompt_source "${PROMPT_SOURCE}" --private "${PRIVATE}" \
   2>&1 | tee "${RUN_DIR}/dataset/generate.log"
 
 for split in train test; do

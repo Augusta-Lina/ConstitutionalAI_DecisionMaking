@@ -18,6 +18,7 @@
 import json
 import os
 import random
+import re
 import time
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -26,7 +27,7 @@ from dataclasses import dataclass
 import pandas as pd
 import requests
 from dotenv import load_dotenv
-from datasets import Dataset, load_dataset
+from datasets import Dataset, DatasetDict, load_dataset
 from huggingface_hub import HfApi
 from transformers import AutoTokenizer, HfArgumentParser
 
@@ -57,6 +58,11 @@ class Args:
     """Whether to add a timestamp to repo_id"""
     push_to_hub: bool = False
     """Whether to push to the Hub"""
+    prompt_source: str = "hh-rlhf"
+    """Where prompts come from: "hh-rlhf" (Anthropic harmless-base), or the path of an unpacked TWA folder (Change My View posts)"""
+    private: bool = False
+    """Push the Hub dataset as private (required for TWA: licence CC BY-NC-ND)"""
+
 
 
 parser = HfArgumentParser((Args,))
@@ -79,28 +85,60 @@ with open(args.constitution_path) as f:
     system_chat = [item for sublist in system_chat for item in sublist]
 
 
-# Block 3: Load Prompts from hh-rlhf
+# Block 3: Load prompts (hh-rlhf, or Change My View posts from a local TWA folder)
 # -----------------------------
 
-# Load hh-rlhf harmless-base, keep the first N rows per split, extract the first "Human:" turn as prompt.
+def load_hh_rlhf():
+    """Anthropic hh-rlhf harmless-base: the first "Human:" turn of each conversation is the prompt."""
+    ds = load_dataset("Anthropic/hh-rlhf", data_dir="harmless-base")
 
-# first "Human:" turn of each hh-rlhf harmless-base conversation
-ds = load_dataset("Anthropic/hh-rlhf", data_dir="harmless-base")
+    def extract(example):
+        for segment in example["chosen"].split("\n\n"):
+            if "Human:" in segment:
+                return {"prompt": segment.split(": ")[1]}
+
+    ds = ds.map(extract)
+    return ds.remove_columns(["chosen", "rejected"])
+
+
+def load_twa(folder, max_chars=3000):
+    """Winning Arguments / TWA: each Change My View post (title + body) is a prompt; keeps the dataset's own train/test split."""
+    import glob
+
+    EDIT_MARK = re.compile(r"^\s*\**\s*(?:[\w-]+\s+){0,3}(?:edit|delta)s?\s*\d*\s*:", re.I | re.M)
+
+    def clean(body):
+        """Remove what the poster added after replies came in: paragraphs that are edits, and edits that start a line."""
+        kept = []
+        for paragraph in re.split(r"\n\s*\n", body):
+            m = EDIT_MARK.search(paragraph)
+            if m is None:
+                kept.append(paragraph)
+            elif m.start() > 0:
+                kept.append(paragraph[: m.start()])  # the edit begins on a later line: keep what precedes it
+            # else: the whole paragraph is an edit, drop it
+        return "\n\n".join(p.strip() for p in kept if p.strip())
+
+    splits = {}
+    for split in ["train", "test"]:
+        prompts = []
+        for path in sorted(glob.glob(f"{folder}/{split}/*/*/op.json")):
+            with open(path) as f:
+                op = json.load(f)
+            body = clean(op["op_text"])
+            if len(body) <= max_chars:  # skip over-long posts rather than cutting them
+                prompts.append(f"{op['op_title'].strip()}\n\n{body}")
+        splits[split] = Dataset.from_dict({"prompt": prompts})
+    return DatasetDict(splits)
+
+
+
+ds = load_hh_rlhf() if args.prompt_source == "hh-rlhf" else load_twa(args.prompt_source)
 for key in ds:
     max_samples = len(ds[key]) if args.max_samples == -1 else args.max_samples
     ds[key] = ds[key].select(range(max_samples))
 
 
-def extract(example):
-    example = example["chosen"]
-    split_text = example.split("\n\n")
-    for segment in split_text:
-        if "Human:" in segment:
-            return {"prompt": segment.split(": ")[1]}
-
-
-ds = ds.map(extract)
-ds = ds.remove_columns(["chosen", "rejected"])
 
 # Block 4: one call to the vLLM server (replaces client.text_generation)
 # -----------------------------
@@ -220,8 +258,8 @@ def main():
             repo_id = args.repo_id
             if "/" not in repo_id:  # find the current user
                 repo_id = f"{api.whoami()['name']}/{repo_id}"
-            post_ds.select(range(len(post_ds) // 2)).push_to_hub(repo_id, split=f"{split}_sft")
-            post_ds.select(range(len(post_ds) // 2, len(post_ds))).push_to_hub(repo_id, split=f"{split}_prefs")
+            post_ds.select(range(len(post_ds) // 2)).push_to_hub(repo_id, split=f"{split}_sft", private=args.private)
+            post_ds.select(range(len(post_ds) // 2, len(post_ds))).push_to_hub(repo_id, split=f"{split}_prefs", private=args.private)
             for file, name in zip([__file__, args.constitution_path], ["create_dataset.py", "constitution.json"]):
                 api.upload_file(path_or_fileobj=file, path_in_repo=name, repo_id=repo_id, repo_type="dataset")
 
