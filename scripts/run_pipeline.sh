@@ -3,7 +3,7 @@
 # Every output goes to /workspace/runs/<run name>/ (persistent volume), nothing is overwritten.
 # Usage, from the repo root on the pod, inside tmux so it survives disconnects:
 #   bash scripts/run_pipeline.sh <run name> <constitution file> [max_samples] [prompt source]
-#   e.g. bash scripts/run_pipeline.sh 2026-10-15_anthropic data-generation/constitution_anthropic.json 128
+#   e.g. bash scripts/run_pipeline.sh 2026-10-16_decision data-generation/constitution_decision.json 128 prbench
 
 # Block 1: settings
 # ---------------------
@@ -12,8 +12,11 @@ set -euo pipefail
 RUN_NAME="${1:?usage: run_pipeline.sh <run name> <constitution file> [max_samples]}"
 CONSTITUTION="${2:?usage: run_pipeline.sh <run name> <constitution file> [max_samples]}"
 MAX_SAMPLES="${3:-128}"
-PROMPT_SOURCE="${4:-hh-rlhf}"                  # "hh-rlhf", or a folder of unpacked TWA posts, e.g. /workspace/datasets/TWA
-PRIVATE=$([ "${PROMPT_SOURCE}" = "hh-rlhf" ] && echo false || echo true)
+PROMPT_SOURCE="${4:-hh-rlhf}"                  # "hh-rlhf", "prbench", or a folder of unpacked TWA posts, e.g. /workspace/datasets/TWA
+case "${PROMPT_SOURCE}" in
+  hh-rlhf|prbench) PRIVATE=false ;;            # public datasets (MIT-style / CC BY): the generated dataset can be public
+  *)               PRIVATE=true ;;             # TWA is CC BY-NC-ND: keep the generated dataset private
+esac
 MAX_WORKERS=16
 HF_USER="AugustaLina"
 

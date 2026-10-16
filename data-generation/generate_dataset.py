@@ -59,7 +59,9 @@ class Args:
     push_to_hub: bool = False
     """Whether to push to the Hub"""
     prompt_source: str = "hh-rlhf"
-    """Where prompts come from: "hh-rlhf" (Anthropic harmless-base), or the path of an unpacked TWA folder (Change My View posts)"""
+    """Where prompts come from: "hh-rlhf" (Anthropic harmless-base, HF's original), "prbench" (ScaleAI/PRBench professional
+    finance/legal decisions, first turn of each task, 80/20 split with seed 0), or the path of an unpacked TWA folder
+    (Change My View posts, its own train/test split)"""
     private: bool = False
     """Push the Hub dataset as private (required for TWA: licence CC BY-NC-ND)"""
 
@@ -133,7 +135,23 @@ def load_twa(folder, max_chars=3000):
 
 
 
-ds = load_hh_rlhf() if args.prompt_source == "hh-rlhf" else load_twa(args.prompt_source)
+def load_prbench(test_size=0.2, seed=0):
+    """ScaleAI/PRBench: 1,100 expert-written finance and legal tasks. The opening turn of each task is the prompt;
+    finance and legal are pooled, shuffled with a fixed seed and split 80/20 (the benchmark has no split of its own)."""
+    from datasets import concatenate_datasets
+
+    raw = load_dataset("ScaleAI/PRBench")
+    pooled = concatenate_datasets([raw["finance"], raw["legal"]])
+    pooled = pooled.map(lambda row: {"prompt": row["prompt_0"].strip()}, remove_columns=pooled.column_names)
+    return pooled.shuffle(seed=seed).train_test_split(test_size=test_size, seed=seed)
+
+
+if args.prompt_source == "hh-rlhf":
+    ds = load_hh_rlhf()
+elif args.prompt_source == "prbench":
+    ds = load_prbench()
+else:
+    ds = load_twa(args.prompt_source)
 for key in ds:
     max_samples = len(ds[key]) if args.max_samples == -1 else args.max_samples
     ds[key] = ds[key].select(range(max_samples))

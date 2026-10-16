@@ -98,6 +98,14 @@ Each run saves `train.jsonl` and `test.jsonl` to `/workspace/outputs/<repo_id>/`
 
 Useful options: `--max_workers 1` for strictly sequential requests, `--constitution_path` to use a different constitution, `--no_timestamp` to reuse a dataset name.
 
+**Prompt sources** (`--prompt_source`, also the 4th argument of `run_pipeline.sh`). The replication used HF's choice, the harmless red-team prompts; this repo adds two decision-oriented sources, switchable per run and recorded in each run folder's `generate.log`:
+
+| Value | Prompts | Split | Licence / Hub push |
+|---|---|---|---|
+| `hh-rlhf` (default) | first human turn of `Anthropic/hh-rlhf` harmless-base | the dataset's own | public |
+| `prbench` | opening turn of each `ScaleAI/PRBench` task: 1,100 expert-written finance and legal decisions | pooled, shuffled (seed 0), 80/20 → 880 / 220 | CC BY 4.0, public |
+| a folder path, e.g. `/workspace/datasets/TWA` | Change My View posts from Winning Arguments / TWA (`tizaino/TWA`, unpacked on the volume): title + body, after-the-fact edits removed, posts over 3,000 characters skipped | the dataset's own (2,123 / 406) | CC BY-NC-ND: the generated dataset is pushed **private** |
+
 **Readable report.** Turns a JSONL file into Markdown, one section per prompt (prompt, first answer, principle, critique, revision). Works on the pod or on your own machine after `scp`-ing the file.
 
 ```bash
