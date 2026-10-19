@@ -146,15 +146,19 @@ def load_prbench(test_size=0.2, seed=0):
     return pooled.shuffle(seed=seed).train_test_split(test_size=test_size, seed=seed)
 
 
+def load_jsonl_folder(folder):
+    """A folder holding train.jsonl and test.jsonl with a `prompt` field per line (e.g. the synthetic prompts)."""
+    return load_dataset("json", data_files={"train": f"{folder}/train.jsonl", "test": f"{folder}/test.jsonl"})
+
+
 if args.prompt_source == "hh-rlhf":
     ds = load_hh_rlhf()
 elif args.prompt_source == "prbench":
     ds = load_prbench()
+elif os.path.exists(f"{args.prompt_source}/train.jsonl"):
+    ds = load_jsonl_folder(args.prompt_source)
 else:
     ds = load_twa(args.prompt_source)
-for key in ds:
-    max_samples = len(ds[key]) if args.max_samples == -1 else args.max_samples
-    ds[key] = ds[key].select(range(max_samples))
 
 
 
