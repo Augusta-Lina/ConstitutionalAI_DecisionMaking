@@ -216,6 +216,7 @@ def process_text(split, i, task):
         token_length += n_tokens
         row[prompt_key] = prompt
         row[response_key] = completion
+        row[f"{response_key}_capped"] = n_tokens >= args.max_new_tokens  # cut off at the token limit?
     return split, i, token_length, row
 
 
@@ -240,6 +241,8 @@ def main():
     total_tokens = sum(result[2] for result in results)
     overall_tokens_per_second = total_tokens / total_duration if total_duration > 0 else 0
     print(f"Overall Tokens per Second: {overall_tokens_per_second}")
+    capped = {k: sum(r[3][f"{k}_capped"] for r in results) for k in ["init_response", "critic_response", "revision_response"]}
+    print(f"Calls cut off at max_new_tokens={args.max_new_tokens} (of {len(results)} rows each): {capped}", flush=True)
 
     all_ds = defaultdict(lambda: defaultdict(list))
     for result in results:

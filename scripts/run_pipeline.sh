@@ -110,6 +110,8 @@ lines = [
     f"| Before training | {dpo.get('eval_baseline_loss', float('nan')):.3f} | 0% | 0.00 |",
     f"| Final | {dpo['eval_loss']:.3f} | {pct(dpo['eval_rewards/accuracies'])} | {dpo['eval_rewards/margins']:.2f} |",
     f"| Train loss / time | {dpo['train_loss']:.3f} | {dpo['train_runtime'] / 60:.1f} min |", "",
+    "## Generation", "",
+    next((l.strip() for l in open(f"{run_dir}/dataset/generate.log") if l.startswith("Calls cut off at")), "(no cut-off count in generate.log)"), "",
     "Read `eval/eval-report.md` before trusting any of the numbers above.",
 ]
 open(f"{run_dir}/run.md", "w").write("\n".join(lines) + "\n")
