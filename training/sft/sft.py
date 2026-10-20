@@ -61,6 +61,10 @@ class ScriptArguments(trl.ScriptArguments):
         default=None,
         metadata={"help": "Datasets to mix, with weights. See config.yaml."},
     )
+    test_dataset: Optional[dict[str, Any]] = field(
+        default=None,
+        metadata={"help": "One dataset scored after training, never used to pick an epoch: id, config, split, columns."},
+    )
 
     def __post_init__(self):
         if self.dataset_name is None and self.dataset_mixture is None:
@@ -203,12 +207,22 @@ def main(script_args, training_args, model_args):
     logger.info("*** Loading model ***")
     model = get_model(model_args, training_args)
 
+    # Held-out sets. "val" = rows cut from the mixture, scored each epoch and used to pick the best one.
+    # "test" = a separate split scored on the same schedule but never used for any decision (not in the original).
+    eval_sets = {"val": dataset[script_args.dataset_test_split]}
+    if script_args.test_dataset is not None:
+        t = script_args.test_dataset
+        test_ds = datasets.load_dataset(t["id"], t.get("config"), split=t["split"])
+        eval_sets["test"] = test_ds.select_columns(t["columns"])
+        logger.info(f"Test set: {t['id']} {t['split']}, {len(test_ds)} rows")
+
+
     # The trainer: wires the model, data and settings together
     trainer = SFTTrainer(
         model=model,
         args=training_args,
         train_dataset=dataset[script_args.dataset_train_split],
-        eval_dataset=(dataset[script_args.dataset_test_split] if training_args.eval_strategy != "no" else None),
+        eval_dataset=(eval_sets if training_args.eval_strategy != "no" else None),
         processing_class=tokenizer,
         peft_config=get_peft_config(model_args),
     )

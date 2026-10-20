@@ -29,16 +29,16 @@ dataset_mixture:
         - chosen
         - rejected
       weight: 1.0
-    - id: AugustaLina/cai-2026-10-20_synth_v3.1_clean
-      config: default
-      split: test_prefs
-      columns:
-        - chosen
-        - rejected
-      weight: 1.0
   test_split_size: 32
   seed: 0
 dataset_num_proc: 4
+test_dataset:                             # scored after training on the same schedule as val, never used to pick an epoch
+  id: AugustaLina/cai-2026-10-20_synth_v3.1_clean
+  config: default
+  split: test_prefs
+  columns:
+    - chosen
+    - rejected
 
 # Block 3: DPOTrainer arguments
 # -----------------------
@@ -63,6 +63,6 @@ push_to_hub: false
 save_strategy: epoch
 save_total_limit: 2
 load_best_model_at_end: true
-metric_for_best_model: eval_loss
+metric_for_best_model: eval_val_loss
 seed: 42
 warmup_steps: 0.1
