@@ -109,6 +109,9 @@ def load_jsonl_folder(folder):
 
 
 ds = load_hh_rlhf() if args.prompt_source == "hh-rlhf" else load_jsonl_folder(args.prompt_source)
+for key in ds:
+    max_samples = len(ds[key]) if args.max_samples == -1 else args.max_samples
+    ds[key] = ds[key].select(range(max_samples))
 
 
 
