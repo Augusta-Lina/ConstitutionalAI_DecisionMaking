@@ -18,7 +18,6 @@
 import json
 import os
 import random
-import re
 import time
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -59,11 +58,8 @@ class Args:
     push_to_hub: bool = False
     """Whether to push to the Hub"""
     prompt_source: str = "hh-rlhf"
-    """Where prompts come from: "hh-rlhf" (Anthropic harmless-base, HF's original), "prbench" (ScaleAI/PRBench professional
-    finance/legal decisions, first turn of each task, 80/20 split with seed 0), or the path of an unpacked TWA folder
-    (Change My View posts, its own train/test split)"""
-    private: bool = False
-    """Push the Hub dataset as private (required for TWA: licence CC BY-NC-ND)"""
+    """Where prompts come from: "hh-rlhf" (Anthropic harmless-base, the baseline),
+    or a folder holding train.jsonl and test.jsonl (e.g. data-generation/prompts/synthetic)"""
 
 
 
@@ -87,7 +83,7 @@ with open(args.constitution_path) as f:
     system_chat = [item for sublist in system_chat for item in sublist]
 
 
-# Block 3: Load prompts (hh-rlhf, or Change My View posts from a local TWA folder)
+# Block 3: Load prompts (hh-rlhf for the baseline, or a folder of our own prompts)
 # -----------------------------
 
 def load_hh_rlhf():
@@ -103,62 +99,12 @@ def load_hh_rlhf():
     return ds.remove_columns(["chosen", "rejected"])
 
 
-def load_twa(folder, max_chars=3000):
-    """Winning Arguments / TWA: each Change My View post (title + body) is a prompt; keeps the dataset's own train/test split."""
-    import glob
-
-    EDIT_MARK = re.compile(r"^\s*\**\s*(?:[\w-]+\s+){0,3}(?:edit|delta)s?\s*\d*\s*:", re.I | re.M)
-
-    def clean(body):
-        """Remove what the poster added after replies came in: paragraphs that are edits, and edits that start a line."""
-        kept = []
-        for paragraph in re.split(r"\n\s*\n", body):
-            m = EDIT_MARK.search(paragraph)
-            if m is None:
-                kept.append(paragraph)
-            elif m.start() > 0:
-                kept.append(paragraph[: m.start()])  # the edit begins on a later line: keep what precedes it
-            # else: the whole paragraph is an edit, drop it
-        return "\n\n".join(p.strip() for p in kept if p.strip())
-
-    splits = {}
-    for split in ["train", "test"]:
-        prompts = []
-        for path in sorted(glob.glob(f"{folder}/{split}/*/*/op.json")):
-            with open(path) as f:
-                op = json.load(f)
-            body = clean(op["op_text"])
-            if len(body) <= max_chars:  # skip over-long posts rather than cutting them
-                prompts.append(f"{op['op_title'].strip()}\n\n{body}")
-        splits[split] = Dataset.from_dict({"prompt": prompts})
-    return DatasetDict(splits)
-
-
-
-def load_prbench(test_size=0.2, seed=0):
-    """ScaleAI/PRBench: 1,100 expert-written finance and legal tasks. The opening turn of each task is the prompt;
-    finance and legal are pooled, shuffled with a fixed seed and split 80/20 (the benchmark has no split of its own)."""
-    from datasets import concatenate_datasets
-
-    raw = load_dataset("ScaleAI/PRBench")
-    pooled = concatenate_datasets([raw["finance"], raw["legal"]])
-    pooled = pooled.map(lambda row: {"prompt": row["prompt_0"].strip()}, remove_columns=pooled.column_names)
-    return pooled.shuffle(seed=seed).train_test_split(test_size=test_size, seed=seed)
-
-
 def load_jsonl_folder(folder):
-    """A folder holding train.jsonl and test.jsonl with a `prompt` field per line (e.g. the synthetic prompts)."""
+    """A folder holding train.jsonl and test.jsonl with a `prompt` field per line (built by build_prompts.py)."""
     return load_dataset("json", data_files={"train": f"{folder}/train.jsonl", "test": f"{folder}/test.jsonl"})
 
 
-if args.prompt_source == "hh-rlhf":
-    ds = load_hh_rlhf()
-elif args.prompt_source == "prbench":
-    ds = load_prbench()
-elif os.path.exists(f"{args.prompt_source}/train.jsonl"):
-    ds = load_jsonl_folder(args.prompt_source)
-else:
-    ds = load_twa(args.prompt_source)
+ds = load_hh_rlhf() if args.prompt_source == "hh-rlhf" else load_jsonl_folder(args.prompt_source)
 
 
 
@@ -283,8 +229,9 @@ def main():
             repo_id = args.repo_id
             if "/" not in repo_id:  # find the current user
                 repo_id = f"{api.whoami()['name']}/{repo_id}"
-            post_ds.select(range(len(post_ds) // 2)).push_to_hub(repo_id, split=f"{split}_sft", private=args.private)
-            post_ds.select(range(len(post_ds) // 2, len(post_ds))).push_to_hub(repo_id, split=f"{split}_prefs", private=args.private)
+            post_ds.select(range(len(post_ds) // 2)).push_to_hub(repo_id, split=f"{split}_sft")
+            post_ds.select(range(len(post_ds) // 2, len(post_ds))).push_to_hub(repo_id, split=f"{split}_prefs")
+
             for file, name in zip([__file__, args.constitution_path], ["create_dataset.py", "constitution.json"]):
                 api.upload_file(path_or_fileobj=file, path_in_repo=name, repo_id=repo_id, repo_type="dataset")
 
