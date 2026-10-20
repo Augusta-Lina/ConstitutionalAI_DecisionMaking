@@ -49,6 +49,10 @@ class Args:
     """Local model folder (for the tokenizer and its chat template)"""
     server_url: str = "http://localhost:8000/v1/completions"
     """The vLLM server's completions endpoint"""
+    writer: str = "vllm"
+    """Which model writes the answers, critiques and rewrites: "vllm" (the local Mistral server) or "claude" (the Anthropic API)"""
+    claude_model: str = "claude-opus-5-5"
+    """Claude model id, used when writer is "claude" """
     output_dir: str = "/workspace/outputs"
     """Where to save the generated datasets as JSONL files"""
     repo_id: str = "cai-conversation-dev"
@@ -75,7 +79,7 @@ if args.timestamp:
 # Load Mistral's tokenizer for its chat template.
 # Read the JSON: the principles list, plus few-shot example chats flattened.
 
-tokenizer = AutoTokenizer.from_pretrained(args.model_path)
+tokenizer = AutoTokenizer.from_pretrained(args.model_path) if args.writer == "vllm" else None
 with open(args.constitution_path) as f:
     data = json.load(f)
     constitutions = data["constitutions"]
@@ -116,7 +120,7 @@ ds = load_hh_rlhf() if args.prompt_source == "hh-rlhf" else load_jsonl_folder(ar
 STOP_SEQ = ["User:", "###", "<|endoftext|>"]
 
 
-def generate(chat):
+def generate_vllm(chat):
     """Send the chat so far to the server; return the completion and its token count. Retries twice."""
     body = {
         "model": "mistral",
@@ -143,6 +147,34 @@ def generate(chat):
             completion = completion[: -len(stop_seq)].rstrip()
     return completion, result["usage"]["completion_tokens"]
 
+
+
+def generate_claude(chat):
+    """Send the chat so far to the Anthropic API; return the completion and its token count. Retries twice."""
+    import anthropic
+
+    client = anthropic.Anthropic()
+    for attempt in range(3):
+        try:
+            response = client.messages.create(
+                model=args.claude_model,
+                max_tokens=args.max_new_tokens,
+                messages=chat,
+                cache_control={"type": "ephemeral"},  # the demonstrations repeat in every call: cache them
+            )
+            break
+        except (anthropic.RateLimitError, anthropic.APIStatusError, anthropic.APIConnectionError) as e:
+            print(f"Request failed (attempt {attempt + 1}/3): {e}", flush=True)
+            if attempt == 2:
+                raise
+            time.sleep(10)
+    if response.stop_reason == "refusal":
+        raise RuntimeError(f"Claude declined this request: {response.stop_details}")
+    completion = "".join(block.text for block in response.content if block.type == "text")
+    return completion, response.usage.output_tokens
+
+
+generate = generate_claude if args.writer == "claude" else generate_vllm
 
 # Block 5: Critique-revision for One Prompt
 # -----------------------------
