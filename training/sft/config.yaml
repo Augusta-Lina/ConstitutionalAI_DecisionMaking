@@ -20,7 +20,7 @@ lora_target_modules: all-linear
 chat_template_path: training/sft/chat_template.jinja
 dataset_mixture:
   datasets:
-    - id: AugustaLina/cai-conversation-dev1791308628
+    - id: AugustaLina/cai-2026-10-20_synth_v3.1_clean
       config: default
       split: train_sft
       columns:
