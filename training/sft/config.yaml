@@ -31,8 +31,8 @@ dataset_mixture:
       split: test_sft
       columns:
         - messages
-      weight: 0.003
-  test_split_size: 16 # actual number
+      weight: 0.02
+  test_split_size: 50 # actual number
   seed: 0
 dataset_num_proc: 4
 test_dataset:                             # scored after training on the same schedule as val, never used to pick an epoch
