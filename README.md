@@ -14,8 +14,7 @@ cai-replication/
 ├── scripts/                  ← setup and one-off tasks
 │   ├── download_model.py     ← download Mistral-7B-Instruct-v0.1 to /workspace/models
 │   ├── setup_pod.sh          ← pod setup: uv, caches, uv sync, vLLM
-│   ├── serve_model.sh        ← start the vLLM server on port 8000
-│   └── run_pipeline.sh       ← run everything for one constitution (see section 0)
+│   └── serve_model.sh        ← start the vLLM server on port 8000
 ├── data-generation/          ← Stages 1–2
 │   ├── constitution_anthropic.json ← the original constitution, unchanged
 │   ├── generate_dataset.py   ← critique–revision generation + dataset construction
@@ -27,20 +26,6 @@ cai-replication/
     └── generate.py           ← base vs SFT vs DPO answers on test_sft prompts → Markdown
 
 ```
-
-## 0. Run everything: scripts/run_pipeline.sh
-
-One command runs generation → SFT → DPO → evaluation for one constitution. Everything goes to `/workspace/runs/<run name>/` on the volume: the dataset with Markdown reports, both adapters with logs and per-run config copies, the eval report, `pipeline.log`, and a one-page `run.md` summary. An existing run name is refused, so nothing is overwritten.
-
-```bash
-# on the pod, after scripts/setup_pod.sh and a .env containing HF_TOKEN; inside tmux so it survives disconnects
-tmux new -s pipeline
-bash scripts/run_pipeline.sh 2026-10-15_anthropic data-generation/constitution_anthropic.json 128
-```
-
-About 45 minutes at 128 samples. Sections 3 and 5 describe what the script runs, stage by stage.
-
-The script runs the following processes:
 
 ## 1. Setup
 
@@ -103,7 +88,8 @@ Useful options: `--max_workers 1` for strictly sequential requests, `--constitut
 | Value | Prompts | Split |
 |---|---|---|
 | `hh-rlhf` (default, the baseline) | first human turn of `Anthropic/hh-rlhf` harmless-base, as in HF's pipeline | the dataset's own |
-| a folder, e.g. `data-generation/prompts/synthetic` | our own prompts: `synthetic-prompts.md` (100 decision prompts, 75 AI safety, 25 lay) turned into `train.jsonl` / `test.jsonl` by `build_prompts.py` | 80/20, seed 0 → 80 / 20 |
+| a folder, e.g. `data-generation/prompts/synthetic-1000` | our own prompts: `synthetic-prompts-1000.md` (1,000 decision prompts, 700 AI safety, 300 lay) turned into `train.jsonl` / `test.jsonl` by `build_prompts.py --test_fraction 0.1` | 90/10, seed 0 → 900 / 100 |
+| `data-generation/prompts/synthetic-1000-rerun`, `-rerun2` | the prompts whose rewrites were dropped in hand-cleaning (374, then 207), re-sampled with the same setup; same train/test side as in `synthetic-1000` | as above |
 
 
 **Readable report.** Turns a JSONL file into Markdown, one section per prompt (prompt, first answer, principle, critique, revision). Works on the pod or on your own machine after `scp`-ing the file.
