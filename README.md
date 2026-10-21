@@ -88,8 +88,7 @@ Useful options: `--max_workers 1` for strictly sequential requests, `--constitut
 | Value | Prompts | Split |
 |---|---|---|
 | `hh-rlhf` (default, the baseline) | first human turn of `Anthropic/hh-rlhf` harmless-base, as in HF's pipeline | the dataset's own |
-| a folder, e.g. `data-generation/prompts/synthetic-1000` | our own prompts: `synthetic-prompts-1000.md` (1,000 decision prompts, 700 AI safety, 300 lay) turned into `train.jsonl` / `test.jsonl` by `build_prompts.py --test_fraction 0.1` | 90/10, seed 0 → 900 / 100 |
-| `data-generation/prompts/synthetic-1000-rerun`, `-rerun2` | the prompts whose rewrites were dropped in hand-cleaning (374, then 207), re-sampled with the same setup; same train/test side as in `synthetic-1000` | as above |
+| a folder holding `train.jsonl` and `test.jsonl` | our own prompts: `synthetic-prompts-1000.md` (1,000 decision prompts, 700 AI safety, 300 lay) turned into the two files by `build_prompts.py --input data-generation/synthetic-prompts-1000.md --output <folder> --test_fraction 0.1` | 90/10, seed 0 → 900 / 100 |
 
 
 **Readable report.** Turns a JSONL file into Markdown, one section per prompt (prompt, first answer, principle, critique, revision). Works on the pod or on your own machine after `scp`-ing the file.
