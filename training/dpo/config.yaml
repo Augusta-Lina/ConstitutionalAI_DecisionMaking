@@ -22,7 +22,7 @@ dataset_mixture:
         - chosen
         - rejected
       weight: 0.03
-    - id: AugustaLina/cai-2026-10-20_synth_v3.1_clean
+    - id: AugustaLina/cai-2026-10-21_synth1000_v3.1_clean_all
       config: default
       split: train_prefs
       columns:
@@ -33,7 +33,7 @@ dataset_mixture:
   seed: 0
 dataset_num_proc: 4
 test_dataset:                             # scored after training on the same schedule as val, never used to pick an epoch
-  id: AugustaLina/cai-2026-10-20_synth_v3.1_clean
+  id: AugustaLina/cai-2026-10-21_synth1000_v3.1_clean_all
   config: default
   split: test_prefs
   columns:

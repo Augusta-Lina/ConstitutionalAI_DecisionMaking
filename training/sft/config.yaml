@@ -20,7 +20,7 @@ lora_target_modules: all-linear
 chat_template_path: training/sft/chat_template.jinja
 dataset_mixture:
   datasets:
-    - id: AugustaLina/cai-2026-10-20_synth_v3.1_clean
+    - id: AugustaLina/cai-2026-10-21_synth1000_v3.1_clean_all
       config: default
       split: train_sft
       columns:
@@ -36,7 +36,7 @@ dataset_mixture:
   seed: 0
 dataset_num_proc: 4
 test_dataset:                             # scored after training on the same schedule as val, never used to pick an epoch
-  id: AugustaLina/cai-2026-10-20_synth_v3.1_clean
+  id: AugustaLina/cai-2026-10-21_synth1000_v3.1_clean_all
   config: default
   split: test_sft
   columns:
